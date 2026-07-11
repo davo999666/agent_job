@@ -1,0 +1,8 @@
+fastapi
+pydantic
+uvicorn
+langchain-core
+langchain-openai
+pypdf
+python-docx
+
