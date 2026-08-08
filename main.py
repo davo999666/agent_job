@@ -74,7 +74,7 @@ def receive_job(job: Job):
             # -----------------------------
             # Cache CV data
             # -----------------------------
-            save_cv_cache(cv_data)
+            # save_cv_cache(cv_data)
 
             # -----------------------------
             # Stream LLM response
