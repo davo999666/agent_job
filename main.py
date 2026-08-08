@@ -46,35 +46,37 @@ def receive_job(job: Job):
             # -----------------------------
             # Use cached CV if available
             # -----------------------------
+            cv_data = None
+            cached_data = None
+
             if cache_is_valid(cv_file):
                 cached_data = load_cached_cv()
 
                 if cached_data is not None:
+                    cv_data = cached_data
                     yield (
                         "event: cv_cached\n"
-                        f"data: {json.dumps(cached_data, ensure_ascii=False)}\n\n"
+                        f"data: {json.dumps({'status': 'Using cached CV'}, ensure_ascii=False)}\n\n"
                     )
 
-                    yield (
-                        "event: done\n"
-                        f"data: {json.dumps({'processing_time_sec': round(perf_counter() - start, 2)})}\n\n"
-                    )
-                    return
+            # If no cached data, convert the CV
+            if cv_data is None:
+                yield (
+                    "event: status\n"
+                    f"data: {json.dumps('Converting CV...', ensure_ascii=False)}\n\n"
+                )
 
-            # -----------------------------
-            # Convert CV
-            # -----------------------------
-            yield (
-                "event: status\n"
-                f"data: {json.dumps('Converting CV...', ensure_ascii=False)}\n\n"
-            )
+                cv_data = convert_cv_to_json(cv_file)
 
-            cv_data = convert_cv_to_json(cv_file)
-
-            # -----------------------------
-            # Cache CV data
-            # -----------------------------
-            # save_cv_cache(cv_data)
+                # -----------------------------
+                # Cache CV data
+                # -----------------------------
+                try:
+                    save_cv_cache(cv_data)
+                except OSError as cache_err:
+                    print(f"Warning: Could not save CV cache: {cache_err}", flush=True)
+                except Exception as cache_err:
+                    print(f"Warning: CV cache error: {cache_err}", flush=True)
 
             # -----------------------------
             # Stream LLM response
