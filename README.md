@@ -6,7 +6,8 @@ An AI-powered application that analyzes job descriptions and compares them again
 
 - **AI-Powered Matching**: Uses LLM (Qwen3.5) via LM Studio to analyze compatibility between jobs and CVs
 - **Detailed Analysis**: Provides match percentages, missing skills, and scoring reasons
-- **JSON Output**: Returns structured JSON data for easy integration
+- **SSE Streaming**: Returns real-time streaming events for progress tracking and token-by-token output
+- **CV Caching**: Caches parsed CV data for faster subsequent requests
 - **Browser Extension Support**: Includes a browser extension for seamless job application workflow
 
 ## How It Works
@@ -14,15 +15,22 @@ An AI-powered application that analyzes job descriptions and compares them again
 1. The system extracts information from the CV (skills, experience, projects, education)
 2. Compares extracted CV data against the job description
 3. Calculates match percentage and identifies missing skills
-4. Returns structured analysis in JSON format
+4. Returns structured analysis via Server-Sent Events (SSE) streaming
 
 ## API Endpoints
 
 ### GET `/`
 Returns a welcome message confirming the server is running.
 
+**Response:**
+```json
+{
+  "message": "Server is running"
+}
+```
+
 ### POST `/job`
-Accepts job information and returns matching analysis.
+Accepts job information and returns matching analysis via SSE streaming.
 
 **Request Body:**
 ```json
@@ -33,23 +41,35 @@ Accepts job information and returns matching analysis.
 }
 ```
 
-**Response:**
-```json
-{
-  "status": "success",
-  "analysis": {
-    "match_percent": number,
-    "matching_job_skills": ["skill1", "skill2"],
-    "missing_skills": [
-      {
-        "skill": "string",
-        "what_is_it": "string"
-      }
-    ],
-    "score_reason": "string"
-  },
-  "processing_time_sec": number
-}
+**SSE Events:**
+
+- `cv_cached` - Returned when cached CV data is used (faster response)
+- `status` - Streaming status updates (e.g., "Converting CV...", "Analyzing CV...")
+- `token` - Streaming LLM output tokens
+- `done` - Final event with processing time
+
+**Example SSE Response:**
+```
+event: status
+data: "Converting CV..."
+
+event: status
+data: "Analyzing CV..."
+
+event: token
+data: "The candidate matches 75% of the requirements"
+
+event: done
+data: {"processing_time_sec": 3.42}
+```
+
+**Note:** If a valid CV cache exists, the response will be:
+```
+event: cv_cached
+data: {"skills": [...], "experience": [...]}
+
+event: done
+data: {"processing_time_sec": 0.15}
 ```
 
 ## Installation
@@ -86,8 +106,8 @@ The server will start on `http://localhost:8000` by default.
 ## Requirements
 
 - Python 3.8+
-- LM Studio running locally (for LLM inference)
-- Qwen3.5 model configured in LM Studio at port 1234
+- LM Studio running locally with an LLM server on port 1234
+- A Qwen model loaded in LM Studio
 
 ## Dependencies
 
@@ -96,7 +116,8 @@ The server will start on `http://localhost:8000` by default.
 - **uvicorn**: ASGI server to run FastAPI applications
 - **langchain-core**: Core LangChain functionality
 - **langchain-openai**: Integration with OpenAI-compatible LLMs
-- **pypdf**: PDF file parsing
+- **pymupdf (fitz)**: PDF file parsing
+- **pypdf**: Alternative PDF file parsing
 - **python-docx**: Word document processing
 
 ## Browser Extension
@@ -110,28 +131,37 @@ The project includes a browser extension that integrates with the API:
 ## Architecture
 
 ```
-├── main.py              # FastAPI server entry point
-├── requirements.txt     # Python dependencies
-├── cv_extractor/        # CV extraction module
-│   └── extractor.py    # CV parsing logic
-├── LangChain/           # AI analysis components
-│   ├── chain.py        # Chain orchestration
-│   ├── llm.py          # LLM configuration
-│   ├── prompt.py       # Prompt templates
-│   └── prompt.py       # Prompt definitions
-├── job-extension/      # Browser extension files
-├── CV.pdf              # Sample CV for testing
-└── cv_cache.json       # Cached CV data
+├── main.py                      # FastAPI server entry point
+├── requirements.txt             # Python dependencies
+├── CV.pdf                       # Sample CV for testing
+├── data/
+│   └── cv_cache.json           # Cached CV data
+├── cv_extractor/               # CV extraction module
+│   └── extractor.py            # CV parsing logic
+├── LangChain/                  # AI analysis components
+│   ├── chain.py                # Chain orchestration
+│   ├── llm.py                  # LLM configuration
+│   └── prompt.py               # Prompt templates
+└── job-extension/              # Browser extension files
+    ├── manifest.json
+    ├── content.js
+    └── modal/
+        └── modal_window.js
 ```
 
 ## Configuration
 
 The LLM is configured to use:
-- Model: `qwen3.5-4b`
-- Base URL: `http://127.0.0.1:1234/v1`
-- API Key: `lm-studio`
-- Temperature: 0.2 (for more deterministic responses)
-- Max Tokens: 4000
+
+| Setting | Value |
+|---------|-------|
+| Model | `qwen3.5-4b@q4_k_m` |
+| Base URL | `http://127.0.0.1:1234/v1` |
+| API Key | `lm-studio` |
+| Temperature | `0.2` (more deterministic responses) |
+| Max Tokens | `4000` |
+
+> **Note:** Ensure LM Studio's local server is running on `http://127.0.0.1:1234` before starting the application.
 
 ## Usage Example
 

@@ -5,4 +5,5 @@ langchain-core
 langchain-openai
 pypdf
 python-docx
+pymupdf
 

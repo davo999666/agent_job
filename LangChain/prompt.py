@@ -1,69 +1,46 @@
 from langchain_core.prompts import ChatPromptTemplate
 
 
-MATCH_PROMPT = ChatPromptTemplate.from_template(
-    """
-You are a strict CV-job matching assistant.
+MATCH_PROMPT = ChatPromptTemplate.from_messages(
+    [
+        (
+            "system",
+            """
+Think briefly and silently. Do not output your reasoning or analysis process.
+You are a professional CV-job matching assistant.
 
-STRICT RULES:
-- Use at most 1000 tokens for the response.
-- Use ONLY explicit information from the CV and job description.
-- Do NOT guess, infer, or assume missing skills.
+Evaluate how well a CV matches a job description.
 
-OUTPUT FORMAT:
-Return ONLY valid JSON as plain text (no markdown, no code fences).
+Match based on meaning, not just keywords. Understand the required role, tech stack, responsibilities, seniority, 
+and equivalent technologies or transferable skills. Compare the candidate's actual experience with what the employer is looking for.
 
-{{
-    "match_percent": number,
-    "matching_job_skills": string[],
-    "missing_skills": [
-        {{
-            "skill": string,
-            "what_is_it": string
-        }}
-    ],
-    "score_reason": string
-}}
+Be objective and conservative. Only credit skills supported by the CV. Do not inflate the match score.
+            """,
+        ),
+        (
+            "human",
+            """
+Compare the CV with the job description.
 
-JOB TITLE:
-{job_title}
+Return ONLY plain text:
 
-JOB DESCRIPTION:
-{job_description}
+Match: <number>%
 
-CV:
-{cv_text}
-"""
-)
+Matching skills:
+- <skill>
 
-CV_EXTRACT_PROMPT = ChatPromptTemplate.from_template(
-    """
-Extract only job-matching information from the CV.
+Missing skills:
+- <skill>: <what it is>
 
-Rules:
-- Use only explicit CV information.
-- Do not guess.
-- Remove duplicates.
-- Keep descriptions very short.
-- Return only valid JSON.
+Reason:
+<short explanation>
 
-Return this structure:
-
-{{
-  "title": "",
-  "years_experience": "",
-  "skills": [],
-  "technologies": [],
-  "projects": [
-    {{
-      "name": "",
-      "keywords": []
-    }}
-  ],
-  "education": []
-}}
+JOB:
+{job_text}
 
 CV:
 {cv_text}
-"""
+            """,
+        ),
+    ]
 )

@@ -20,29 +20,113 @@ async function sendSimple(title, description) {
             throw new Error(`Server returned ${response.status}`);
         }
 
-        const data = await response.json();
+        if (!response.body) {
+            throw new Error("Response body is empty");
+        }
 
-        console.log("FastAPI response:", data);
+        showAnalysisModal();
 
-        const analysis =
-            data.analysis ??
-            data.result ??
-            data.output ??
-            data.message ??
-            data;
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder();
 
-        const time =
-            data.processing_time_sec ??
-            data.processing_time ??
-            data.execution_time ??
-            data.time ??
-            "";
+        let buffer = "";
+        let fullOutput = "";
 
-        showAnalysisModal(analysis, time);
+        function processSseEvent(eventBlock) {
+            if (!eventBlock.trim()) {
+                return;
+            }
+
+            const lines = eventBlock.split("\n");
+
+            const eventLine = lines.find(line => line.startsWith("event:"));
+
+            const dataLines = lines
+                .filter(line => line.startsWith("data:"))
+                .map(line => line.slice(5).replace(/^ /, ""));
+
+            const eventName = eventLine ? eventLine.slice(6).trim() : "message";
+
+            const eventData = dataLines.join("\n");
+
+            if (!eventData) return;
+
+            if (eventName === "token") {
+                const token = JSON.parse(eventData);
+
+                fullOutput += token;
+
+                const outputElement = document.getElementById("ai-stream-output");
+
+                if (outputElement) {
+                    outputElement.textContent = fullOutput;
+                }
+
+            } else if (eventName === "done") {
+                const result = JSON.parse(eventData);
+
+                const timeElement = document.getElementById("ai-processing-time");
+
+                if (timeElement) {
+                    timeElement.textContent = `Processing time: ${result.processing_time_sec} sec`;
+                }
+
+            } else if (eventName === "error") {
+                let errorMessage = eventData;
+
+                try {
+                    errorMessage = JSON.parse(eventData);
+                } catch {
+                    // Use the original error text.
+                }
+
+                throw new Error(errorMessage);
+            }
+        }
+
+        while (true) {
+            const { value, done } = await reader.read();
+
+            buffer += decoder.decode(
+                value || new Uint8Array(),
+                { stream: !done }
+            );
+
+            // Normalize CRLF to LF.
+            buffer = buffer.replace(/\r\n/g, "\n");
+
+            const events = buffer.split("\n\n");
+
+            // Save the incomplete event for the next reader.read().
+            buffer = events.pop() || "";
+
+            for (const eventBlock of events) {
+                processSseEvent(eventBlock);
+            }
+
+            if (done) {
+                // Process any remaining final event.
+                if (buffer.trim()) {
+                    processSseEvent(buffer);
+                }
+
+                break;
+            }
+        }
+
     } catch (error) {
         document.getElementById("ai-loading-toast")?.remove();
-        console.error("AI error:", error);
-        alert("AI analysis failed: " + error.message);
+
+        const timeElement = document.getElementById("ai-processing-time");
+
+        if (timeElement) {
+            timeElement.textContent = `Error: ${error.message}`;
+            timeElement.style.color = "#c62828";
+        } else {
+            document.getElementById("ai-modal")?.remove();
+
+            alert("AI analysis failed: " + error.message);
+        }
     }
 }
 
